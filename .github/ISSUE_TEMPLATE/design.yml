@@ -1,0 +1,25 @@
+name: Design proposal
+description: Propose a bounded change to an OnyxOS requirement or subsystem.
+title: '[Design] '
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and requirement
+      description: Identify the ONX requirement, current limitation and intended observable behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed design and alternatives
+      description: Include ownership, interface, bounded resource use and failure behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and acceptance criteria
+      description: Distinguish research, host model results and measurements on an actual native implementation.
+    validations:
+      required: true
