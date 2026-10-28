@@ -1,0 +1,55 @@
+name: Native Boot Lab
+
+on:
+  push:
+    paths: ['native/**', 'tools/**', 'tests/**', '.github/workflows/boot-lab.yml']
+  pull_request:
+    paths: ['native/**', 'tools/**', 'tests/**', '.github/workflows/boot-lab.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-boot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [aarch64, x86_64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install compiler and VM test dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends clang lld qemu-system-arm qemu-system-x86 qemu-efi-aarch64 ovmf dosfstools
+      - name: Host invariants
+        run: python3 -m unittest discover -s tests -v
+      - name: Cross-compile and package GPT disk
+        run: python3 tools/build_boot.py --arch ${{ matrix.arch }}
+      - name: Rebuild and compare native image
+        run: |
+          python3 tools/build_boot.py --arch ${{ matrix.arch }} --output build/repeat-${{ matrix.arch }}
+          cmp build/${{ matrix.arch }}/OnyxOS-BootLab-${{ matrix.arch }}.img build/repeat-${{ matrix.arch }}/OnyxOS-BootLab-${{ matrix.arch }}.img
+      - name: Check the FAT32 filesystem independently
+        run: |
+          dd if=build/${{ matrix.arch }}/OnyxOS-BootLab-${{ matrix.arch }}.img of=build/${{ matrix.arch }}/esp.img bs=512 skip=2048 count=128991 status=none
+          fsck.fat -n build/${{ matrix.arch }}/esp.img
+      - name: Boot native application and exercise keyboard state
+        run: python3 tools/smoke_boot.py --arch ${{ matrix.arch }} --directory build/${{ matrix.arch }}
+      - name: Create Mac download bundle
+        run: python3 tools/package_boot.py --arch ${{ matrix.arch }} --directory build/${{ matrix.arch }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: boot-lab-${{ matrix.arch }}
+          path: |
+            build/${{ matrix.arch }}/*.zip
+            build/${{ matrix.arch }}/*.sha256
+            build/${{ matrix.arch }}/build-info.json
+            build/${{ matrix.arch }}/evidence/
+          if-no-files-found: warn
+          retention-days: 30
